@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="et">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plakatiprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<style>
+/* Layout: print-shop workbench. Settings panel on the left, a cutting mat on the right where the poster lies with its sheet grid. */
+:root {
+  --paper: #f3f5f6;
+  --panel: #ffffff;
+  --ink: #16202a;
+  --muted: #5b6874;
+  --line: #d9dfe4;
+  --cyan: #0a86b8;
+  --cyan-soft: #e1f1f8;
+  --magenta: #c2246f;
+  --mat: #24564a;
+  --mat-line: rgba(255,255,255,.09);
+  --mat-line-strong: rgba(255,255,255,.18);
+  --good: #1f7a4a; --warn: #a96500; --bad: #b3261e;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #121a20; --panel: #1a242b; --ink: #e7edf1; --muted: #9aa8b3; --line: #2c3a44;
+  --cyan: #4cb6e3; --cyan-soft: #16313e; --magenta: #ec5d9f; --mat: #183d34;
+  --good: #5cc48d; --warn: #e2a64a; --bad: #f08a83; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #121a20; --panel: #1a242b; --ink: #e7edf1; --muted: #9aa8b3; --line: #2c3a44;
+  --cyan: #4cb6e3; --cyan-soft: #16313e; --magenta: #ec5d9f; --mat: #183d34;
+  --good: #5cc48d; --warn: #e2a64a; --bad: #f08a83; color-scheme: dark }
+
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--paper); color: var(--ink); font: 15px/1.5 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 32px }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 18px }
+header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap }
+header svg { flex: none }
+h1 { font: 700 clamp(26px, 4vw, 34px)/1.05 var(--display); margin: 0; letter-spacing: -.01em; text-wrap: balance }
+header p { margin: 2px 0 0; color: var(--muted); max-width: 60ch }
+.main { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: start }
+@media (max-width: 860px) { .main { grid-template-columns: minmax(0,1fr) } .num input { font-size: 16px } }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 18px; min-width: 0 }
+fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0 }
+legend, .lbl { font: 500 11px/1 var(--mono); text-transform: uppercase; letter-spacing: .09em; color: var(--muted); padding: 0; margin-bottom: 8px }
+.seg { display: flex; flex-wrap: wrap; gap: 6px }
+.seg input { position: absolute; opacity: 0; pointer-events: none }
+.seg label { cursor: pointer; padding: 6px 11px; border: 1px solid var(--line); border-radius: 6px; font: 500 13px/1.2 var(--body); background: var(--paper) }
+.seg label small { display: block; font: 400 10.5px/1.3 var(--mono); color: var(--muted) }
+.seg input:checked + label { border-color: var(--cyan); background: var(--cyan-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--cyan) }
+.seg input:focus-visible + label, button:focus-visible, .num input:focus-visible, .drop:focus-within { outline: 2px solid var(--cyan); outline-offset: 2px }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+.num { display: grid; gap: 4px; font-size: 13px; color: var(--muted) }
+.num span { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); padding-right: 8px }
+.num input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 500 14px var(--mono); padding: 7px 8px; outline: none }
+.num em { font: 400 12px var(--mono); color: var(--muted); font-style: normal }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer }
+.check input { accent-color: var(--cyan); width: 16px; height: 16px }
+.more { display: grid; gap: 14px }
+.more[open] > summary { margin-bottom: 14px }
+.more > summary { cursor: pointer; font: 500 14px var(--body); color: var(--muted) }
+.more fieldset + fieldset { margin-top: 14px }
+.drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 14px; display: grid; gap: 6px; text-align: center; cursor: pointer; background: var(--paper); position: relative }
+.drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer }
+.drop b { font-weight: 600 }
+.drop small { color: var(--muted) }
+.file { font: 400 12px var(--mono); color: var(--muted); overflow-wrap: anywhere }
+.pdfpage { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted) }
+
+.stage { display: grid; gap: 12px; min-width: 0 }
+.mat { background-color: var(--mat);
+  background-image: linear-gradient(var(--mat-line-strong) 1px, transparent 1px), linear-gradient(90deg, var(--mat-line-strong) 1px, transparent 1px),
+    linear-gradient(var(--mat-line) 1px, transparent 1px), linear-gradient(90deg, var(--mat-line) 1px, transparent 1px);
+  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px; border-radius: 10px; padding: 24px; display: grid; place-items: center; min-height: 360px; position: relative }
+.mat.dragging { box-shadow: inset 0 0 0 3px var(--cyan) }
+#view { display: block; max-width: 100%; height: auto }
+.matnote { position: absolute; left: 12px; bottom: 8px; font: 400 10.5px var(--mono); color: rgba(255,255,255,.55); letter-spacing: .05em }
+.stats { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: baseline; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px }
+.stat { display: grid; gap: 2px }
+.stat b { font: 700 22px/1.1 var(--display); font-variant-numeric: tabular-nums }
+.stat span { font: 400 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .07em }
+.pill { font: 500 12px var(--mono); padding: 3px 8px; border-radius: 99px; border: 1px solid currentColor; align-self: center }
+.pill.good { color: var(--good) } .pill.warn { color: var(--warn) } .pill.bad { color: var(--bad) }
+.actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap }
+.primary { font: 600 15px var(--body); background: var(--ink); color: var(--panel); border: 0; border-radius: 8px; padding: 11px 18px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center }
+.primary:disabled { opacity: .55; cursor: progress }
+.primary.alt { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink) }
+#msg { font-size: 14px; color: var(--muted) }
+#msg.err { color: var(--bad) }
+.how { font-size: 14px; color: var(--muted); max-width: 70ch; margin: 0; padding-left: 20px }
+.how li + li { margin-top: 3px }
+.how b { color: var(--ink); font-weight: 600 }
+@media (prefers-reduced-motion: no-preference) { .primary { transition: transform .12s } .primary:active { transform: translateY(1px) } }
+</style>
+
+<div class="wrap">
+  <header>
+    <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden="true"><circle cx="19" cy="19" r="10" fill="none" stroke="var(--magenta)" stroke-width="2"/><path d="M19 3v32M3 19h32" stroke="var(--ink)" stroke-width="1.5"/><circle cx="19" cy="19" r="4" fill="var(--cyan)"/></svg>
+    <div>
+      <h1>Plakatiprint</h1>
+      <p>Jaga plakat A4-lehtedeks, mida kodune printer suudab printida. Vali pilt või Wordist salvestatud PDF, määra valmis suurus ja prindi.</p>
+    </div>
+  </header>
+
+  <div class="main">
+    <form class="panel" id="form" autocomplete="off">
+      <fieldset>
+        <legend>Sinu plakat</legend>
+        <label class="drop" for="file">
+          <input type="file" id="file" accept="image/png,image/jpeg,image/webp,application/pdf">
+          <b>Vali pilt või PDF</b>
+          <small>PNG, JPG või PDF · või lohista see matile</small>
+        </label>
+        <div class="file" id="fname">Näidisplakat</div>
+        <div class="pdfpage" id="pdfpageRow" hidden>
+          PDF-i leht <span class="num" style="width:80px"><span><input type="number" id="pdfpage" min="1" value="1"></span></span> / <b id="pdfpages">1</b>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Valmis suurus</legend>
+        <div class="seg" id="sizes">
+          <input type="radio" name="size" id="s-A3" value="A3"><label for="s-A3">A3<small>297×420</small></label>
+          <input type="radio" name="size" id="s-A2" value="A2"><label for="s-A2">A2<small>420×594</small></label>
+          <input type="radio" name="size" id="s-A1" value="A1" checked><label for="s-A1">A1<small>594×841</small></label>
+          <input type="radio" name="size" id="s-A0" value="A0"><label for="s-A0">A0<small>841×1189</small></label>
+          <input type="radio" name="size" id="s-custom" value="custom"><label for="s-custom">Oma<small>laiuse järgi</small></label>
+        </div>
+        <div class="row2" id="customRow" hidden>
+          <label class="num">Laius<span><input type="number" id="customW" min="100" max="5000" step="10" value="1000"><em>mm</em></span></label>
+          <label class="num">Kõrgus<span><input type="text" id="customH" readonly tabindex="-1"><em>mm</em></span></label>
+        </div>
+        </fieldset>
+
+      <details class="more">
+        <summary>Lisaseaded</summary>
+        <fieldset>
+          <legend>Paigutus</legend>
+          <div class="seg" id="orientRow">
+            <input type="radio" name="orient" id="o-p" value="portrait" checked><label for="o-p">Püstine</label>
+            <input type="radio" name="orient" id="o-l" value="landscape"><label for="o-l">Rõhtne</label>
+          </div>
+          <div class="seg">
+            <input type="radio" name="fit" id="f-fit" value="fit" checked><label for="f-fit">Mahuta terve pilt</label>
+            <input type="radio" name="fit" id="f-fill" value="fill"><label for="f-fill">Täida, lõika servad</label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Printimine</legend>
+          <div class="row2">
+            <label class="num">Printimata serv<span><input type="number" id="margin" min="3" max="25" step="1" value="6"><em>mm</em></span></label>
+            <label class="num">Ülekate<span><input type="number" id="overlap" min="0" max="40" step="1" value="10"><em>mm</em></span></label>
+          </div>
+          <label class="check"><input type="checkbox" id="marks" checked> Lõikejooned ja lehtede sildid</label>
+          <label class="check"><input type="checkbox" id="guide"> Prindi ka kokkupaneku juhend</label>
+        </fieldset>
+      </details>
+    </form>
+
+    <section class="stage">
+      <div class="mat" id="mat">
+        <canvas id="view" width="600" height="800" aria-label="Plakati eelvaade lehtede ruudustikuga"></canvas>
+        <div class="matnote">RUUDUSTIK 10 MM · POLE MÕÕTKAVAS</div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="actions">
+        <button type="button" class="primary" id="print">Prindi lehed</button>
+        <button type="button" class="primary" id="phone" hidden>Prindi kohe</button>
+        <button type="button" class="primary alt" id="save">Salvesta PDF</button>
+        <span id="msg" role="status"></span>
+      </div>
+      <details class="more">
+        <summary>Kokkupaneku juhend</summary>
+        <ol class="how">
+          <li>Prindi <b>tegelikus suuruses / 100%</b>. Lülita printimisaknas välja „Sobita lehele“.</li>
+          <li>Lõika igal lehel, kus on roosa katkendjoon, mööda seda joont.</li>
+          <li>Aseta lõigatud serv naaberlehe peale nii, et pilt joondub väikeste märkidega, ja teibi tagant kinni.</li>
+          <li>Lehtede järjekorda näed eelvaatest: read on ülalt A, B, C…, tulbad vasakult 1, 2, 3…</li>
+        </ol>
+      </details>
+    </section>
+  </div>
+</div>
+
+<script>
+const SIZES = { A0:[841,1189], A1:[594,841], A2:[420,594], A3:[297,420] };
+const A4 = [210,297];
+const $ = id => document.getElementById(id);
+const val = n => document.querySelector(`input[name="${n}"]:checked`).value;
+let src = null, srcName = "naidisplakat", pdfDoc = null;
+// Phones and tablets: no printing from a hidden frame, and iOS blanks canvases over about 16.7 MP.
+const handheld = /iPhone|iPad|Android/.test(navigator.userAgent) || navigator.maxTouchPoints > 1;
+
+/* ---------- sample poster ---------- */
+function makeSample() {
+  const c = document.createElement("canvas"); c.width = 1400; c.height = 1980;
+  const g = c.getContext("2d");
+  g.fillStyle = "#f1e6d2"; g.fillRect(0,0,1400,1980);
+  const cols = ["#d9572b","#1f5f8b","#e8b33a","#2f7d5b"];
+  for (let i=0;i<6;i++){ g.fillStyle = cols[i%4]; g.beginPath(); g.arc(250+ (i%3)*450, 420+Math.floor(i/3)*430, 190, 0, Math.PI*(i%2?2:1)); g.fill(); }
+  g.fillStyle = "#1c1c1c"; g.font = "700 150px Georgia, serif"; g.fillText("SÜGIS", 110, 1380);
+  g.fillText("LAAT", 110, 1530);
+  g.font = "400 56px Georgia, serif"; g.fillText("Laupäev, 7. november · Raekoja plats", 116, 1650);
+  g.fillStyle = "#d9572b"; g.fillRect(110, 1720, 1180, 14);
+  g.fillStyle = "#1c1c1c"; g.font = "italic 44px Georgia, serif"; g.fillText("Näidisplakat — vali oma fail", 116, 1840);
+  return c;
+}
+
+/* ---------- loading files ---------- */
+async function loadFile(f) {
+  if (!f) return;
+  msg("");
+  try {
+    if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) {
+      if (!window.pdfjsLib) throw new Error("PDF-i lugeja ei laadinud. Salvesta plakat PNG- või JPG-failina.");
+      pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+      $("pdfpages").textContent = pdfDoc.numPages; $("pdfpage").max = pdfDoc.numPages; $("pdfpage").value = 1;
+      $("pdfpageRow").hidden = pdfDoc.numPages < 2;
+      srcName = f.name.replace(/\.[^.]+$/, "");
+      await renderPdfPage(1);
+    } else {
+      pdfDoc = null; $("pdfpageRow").hidden = true;
+      const url = URL.createObjectURL(f);
+      const img = new Image();
+      await new Promise((ok, no) => { img.onload = ok; img.onerror = () => no(new Error("Seda faili ei saa pildina avada. Proovi PNG- või JPG-faili.")); img.src = url; });
+      src = img; srcName = f.name.replace(/\.[^.]+$/, "");
+      autoOrient();
+    }
+    $("fname").textContent = `${f.name} · ${src.width} × ${src.height} px`;
+    update();
+  } catch (e) { msg(e.message || "Faili ei õnnestunud avada.", true); }
+}
+async function renderPdfPage(n) {
+  const page = await pdfDoc.getPage(n);
+  const v1 = page.getViewport({ scale: 1 });
+  let scale = Math.min(6, 5000 / Math.max(v1.width, v1.height));
+  if (handheld) scale = Math.min(scale, Math.sqrt(16e6 / (v1.width * v1.height)));
+  const vp = page.getViewport({ scale });
+  const c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0,0,c.width,c.height);
+  await page.render({ canvasContext: g, viewport: vp }).promise;
+  src = c; autoOrient();
+}
+function autoOrient() { (src.width > src.height ? $("o-l") : $("o-p")).checked = true; }
+
+/* ---------- geometry ---------- */
+function poster() {
+  const s = val("size");
+  if (s === "custom") {
+    const w = Math.max(100, +$("customW").value || 1000);
+    return { W: w, H: Math.round(w * src.height / src.width) };
+  }
+  let [w,h] = SIZES[s]; if (val("orient") === "landscape") [w,h] = [h,w];
+  return { W: w, H: h };
+}
+function imageRect(W, H) {
+  const ar = src.width / src.height, fill = val("fit") === "fill" && val("size") !== "custom";
+  let w = W, h = W / ar;
+  if (fill ? h < H : h > H) { h = H; w = H * ar; }
+  return { x: (W-w)/2, y: (H-h)/2, w, h };
+}
+function layout() {
+  const { W, H } = poster(), m = +$("margin").value || 0, ov = Math.max(0, +$("overlap").value || 0);
+  const [pw0, ph0] = A4;
+  let best = null;
+  for (const [pw, ph, orient] of [[pw0,ph0,"portrait"],[ph0,pw0,"landscape"]]) {
+    const aw = pw - 2*m, ah = ph - 2*m, sx = aw - ov, sy = ah - ov;
+    if (sx <= 0 || sy <= 0) continue;
+    const cols = W <= aw ? 1 : Math.ceil((W - ov) / sx), rows = H <= ah ? 1 : Math.ceil((H - ov) / sy);
+    if (!best || cols*rows < best.cols*best.rows) best = { pw, ph, orient, aw, ah, sx, sy, cols, rows };
+  }
+  if (!best) return null;
+  best.tiles = [];
+  for (let r=0; r<best.rows; r++) for (let c=0; c<best.cols; c++) {
+    const x = c*best.sx, y = r*best.sy;
+    best.tiles.push({ r, c, x, y, w: Math.min(best.aw, W-x), h: Math.min(best.ah, H-y), name: String.fromCharCode(65+r) + (c+1) });
+  }
+  Object.assign(best, { W, H, m, ov, img: imageRect(W, H) });
+  return best;
+}
+
+/* ---------- preview ---------- */
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function update() {
+  const s = val("size");
+  $("phone").hidden = true;
+  $("customRow").hidden = s !== "custom"; $("orientRow").hidden = s === "custom";
+  if (s === "custom") $("customH").value = poster().H;
+  const L = layout();
+  if (!L) { msg("Ülekate on prinditavast alast suurem. Vähenda ülekatet või serva.", true); return; }
+  if ($("msg").classList.contains("err") && /Ülekate/.test($("msg").textContent)) msg("");
+  draw(L); stats(L);
+}
+function draw(L) {
+  const cv = $("view"), box = $("mat").clientWidth - 48;
+  const maxH = Math.min(window.innerHeight * 0.68, 760);
+  const k = Math.min(box / L.W, maxH / L.H), dpr = window.devicePixelRatio || 1;
+  const w = Math.round(L.W*k), h = Math.round(L.H*k);
+  cv.width = w*dpr; cv.height = h*dpr; cv.style.width = w+"px"; cv.style.height = h+"px";
+  const g = cv.getContext("2d"); g.setTransform(dpr*k,0,0,dpr*k,0,0);
+  g.shadowColor = "rgba(0,0,0,.35)"; g.shadowBlur = 18/k; g.shadowOffsetY = 4/k;
+  g.fillStyle = "#fff"; g.fillRect(0,0,L.W,L.H); g.shadowColor = "transparent";
+  g.save(); g.beginPath(); g.rect(0,0,L.W,L.H); g.clip();
+  g.drawImage(src, L.img.x, L.img.y, L.img.w, L.img.h); g.restore();
+  // overlap bands
+  g.fillStyle = "rgba(194,36,111,.22)";
+  for (let c=1; c<L.cols; c++) g.fillRect(c*L.sx, 0, L.ov, L.H);
+  for (let r=1; r<L.rows; r++) g.fillRect(0, r*L.sy, L.W, L.ov);
+  // sheet outlines + labels
+  g.lineWidth = 1.4/k; g.strokeStyle = "#0a86b8";
+  const fs = Math.max(9, Math.min(15, 14)) / k;
+  for (const t of L.tiles) {
+    g.strokeRect(t.x, t.y, t.w, t.h);
+    const cx = t.x + t.w/2, cy = t.y + t.h/2;
+    g.font = `600 ${fs}px "IBM Plex Mono", monospace`;
+    const tw = g.measureText(t.name).width;
+    g.fillStyle = "rgba(10,134,184,.92)"; g.fillRect(cx - tw/2 - 5/k, cy - fs*.75, tw + 10/k, fs*1.5);
+    g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(t.name, cx, cy + 0.5/k);
+  }
+}
+const ORIENT = { portrait: "püstine", landscape: "rõhtne" };
+function dpiOf(L) { return Math.round(src.width / (L.img.w / 25.4)); }
+function stats(L) {
+  const dpi = dpiOf(L), q = dpi >= 150 ? ["good","Terav"] : dpi >= 100 ? ["warn","Rahuldav"] : ["bad","Jääb uduseks"];
+  $("stats").innerHTML = `
+    <div class="stat"><b>${L.tiles.length}</b><span>A4-lehte</span></div>
+    <div class="stat"><b>${L.cols} × ${L.rows}</b><span>tulpa × rida · ${ORIENT[L.orient]}</span></div>
+    <div class="stat"><b>${Math.round(L.W)} × ${Math.round(L.H)}</b><span>valmis suurus, mm</span></div>
+    <div class="stat"><b>${dpi}</b><span>pildi dpi selles suuruses</span></div>
+    <span class="pill ${q[0]}">${q[1]}</span>`;
+}
+
+/* ---------- PDF output ---------- */
+function renderTile(L, t, dpi) {
+  const s = dpi / 25.4, c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(t.w*s)); c.height = Math.max(1, Math.round(t.h*s));
+  const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0,0,c.width,c.height);
+  g.imageSmoothingQuality = "high";
+  g.setTransform(s,0,0,s,-t.x*s,-t.y*s);
+  g.drawImage(src, L.img.x, L.img.y, L.img.w, L.img.h);
+  const jpeg = c.toDataURL("image/jpeg", 0.9);
+  c.width = c.height = 0; // iOS holds canvas memory until the size is cleared
+  return jpeg;
+}
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+async function buildPdf(L) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: [L.pw, L.ph].sort((a,b)=>a-b), orientation: L.orient });
+  doc.viewerPreferences({ PrintScaling: "None" });
+  const dpi = Math.max(96, Math.min(handheld ? 150 : 200, Math.round(dpiOf(L) * 1.25)));
+  const marks = $("marks").checked, half = L.ov / 2;
+  let first = true;
+
+  if ($("guide").checked) {
+    first = false;
+    doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.text("Kokkupaneku juhend", L.m+4, L.m+12);
+    doc.setFont("helvetica","normal"); doc.setFontSize(10);
+    const lines = [
+      `${srcName} · valmis suurus ${Math.round(L.W)} × ${Math.round(L.H)} mm`,
+      `${L.tiles.length} A4-lehte (${ORIENT[L.orient]}), ${L.cols} tulpa × ${L.rows} rida, ülekate ${L.ov} mm`,
+      "1. Prindi tegelikus suuruses / 100%. Lülita välja „Sobita lehele“.",
+      "2. Lõika iga leht mööda roosat katkendjoont (vasak ja ülemine serv).",
+      "3. Aseta lõigatud serv naaberlehe peale, joonda märkidega ja teibi tagant kinni.",
+      "Read on tähistatud ülalt A, B, C…, tulbad on nummerdatud vasakult."
+    ];
+    lines.forEach((l,i) => doc.text(l, L.m+4, L.m+21 + i*5.5));
+    const top = L.m + 21 + lines.length*5.5 + 6, availW = L.pw - 2*L.m - 8, availH = L.ph - top - L.m - 4;
+    const k = Math.min(availW / L.W, availH / L.H), ox = L.m + 4 + (availW - L.W*k)/2;
+    const thumb = renderTile(L, { x:0, y:0, w:L.W, h:L.H }, Math.min(120, 25.4*1600/Math.max(L.W,L.H)));
+    doc.addImage(thumb, "JPEG", ox, top, L.W*k, L.H*k);
+    doc.setDrawColor(10,134,184); doc.setLineWidth(0.3); doc.setFontSize(9);
+    for (const t of L.tiles) {
+      doc.rect(ox + t.x*k, top + t.y*k, t.w*k, t.h*k);
+      doc.setTextColor(10,134,184); doc.text(t.name, ox + (t.x+t.w/2)*k, top + (t.y+t.h/2)*k, { align: "center", baseline: "middle" });
+    }
+    doc.setTextColor(0,0,0);
+  }
+
+  for (let i=0; i<L.tiles.length; i++) {
+    const t = L.tiles[i];
+    msg(`Valmistan lehte ${i+1} / ${L.tiles.length}…`);
+    await tick();
+    if (!first) doc.addPage([L.pw, L.ph].sort((a,b)=>a-b), L.orient);
+    first = false;
+    doc.addImage(renderTile(L, t, dpi), "JPEG", L.m, L.m, t.w, t.h);
+    if (!marks) continue;
+    doc.setLineWidth(0.15); doc.setDrawColor(150,150,150); doc.setLineDashPattern([], 0);
+    doc.rect(L.m, L.m, t.w, t.h);
+    doc.setDrawColor(194,36,111); doc.setLineWidth(0.3);
+    const tk = Math.min(4, L.m - 1);
+    if (L.ov > 0) {
+      // trim lines on left/top edges shared with a previous sheet
+      doc.setLineDashPattern([2,1.5], 0);
+      if (t.c > 0) doc.line(L.m+half, L.m - tk, L.m+half, L.m + t.h + tk);
+      if (t.r > 0) doc.line(L.m - tk, L.m+half, L.m + t.w + tk, L.m+half);
+      doc.setLineDashPattern([], 0);
+      // alignment ticks on right/bottom edges where the next sheet's trimmed edge lands
+      if (t.c < L.cols-1) { const x = L.m + t.w - half; doc.line(x, L.m - tk, x, L.m - 0.5); doc.line(x, L.m + t.h + 0.5, x, L.m + t.h + tk); }
+      if (t.r < L.rows-1) { const y = L.m + t.h - half; doc.line(L.m - tk, y, L.m - 0.5, y); doc.line(L.m + t.w + 0.5, y, L.m + t.w + tk, y); }
+    }
+    doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(60,60,60);
+    const by = Math.min(L.ph - 1.5, L.m + t.h + Math.max(2.5, L.m*0.6));
+    doc.text(`${t.name}`, L.m, by);
+    doc.setFont("helvetica","normal");
+    doc.text(`rida ${t.r+1}/${L.rows} · tulp ${t.c+1}/${L.cols} · leht ${i+1}/${L.tiles.length}${t.c>0||t.r>0 ? " · lõika mööda katkendjoont" : ""}`, L.m + 6, by);
+    doc.setTextColor(0,0,0);
+  }
+  return doc.output("blob");
+}
+
+let downloads = null;
+(async () => { try { downloads = await window.claude?.use?.("downloads"); } catch { downloads = null; } })();
+
+const inClaude = !!window.claude?.use;
+$("print").hidden = inClaude;
+if (handheld) $("print").textContent = "Valmista printimiseks";
+
+function pdfName(L) { return `${srcName}-${Math.round(L.W)}x${Math.round(L.H)}mm-${L.tiles.length}xA4.pdf`; }
+
+function saveLink(blob, name) {
+  const url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+let printFrame = null;
+function printInFrame(url) {
+  printFrame?.remove();
+  const f = printFrame = document.createElement("iframe");
+  f.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0";
+  // The browser's PDF viewer is still starting when load fires.
+  f.onload = () => setTimeout(() => {
+    try { f.contentWindow.print(); }
+    catch { window.open(url, "_blank"); }
+  }, 500);
+  f.src = url; document.body.append(f);
+}
+
+function busy(on) { $("save").disabled = $("print").disabled = on; }
+
+$("save").addEventListener("click", async () => {
+  const L = layout(); if (!L) return;
+  if (!window.jspdf) { msg("PDF-i koostaja ei laadinud. Laadi leht uuesti ja proovi veel.", true); return; }
+  busy(true);
+  try {
+    const blob = await buildPdf(L), name = pdfName(L);
+    if (inClaude) {
+      if (!downloads) downloads = await window.claude.use("downloads");
+      msg("Kinnita salvestamine aknas…");
+      await downloads.save({ filename: name, data: blob });
+    } else saveLink(blob, name);
+    msg(`Salvestatud: ${name}. Prindi 100% suuruses.`);
+  } catch (e) {
+    const c = e && e.code;
+    msg(c === "declined" ? "Salvestamine katkestati." : c === "rate_limited" ? "Salvestusaken on juba avatud. Lõpeta esmalt see." : (e.message || "PDF-i ei õnnestunud koostada."), c !== "declined");
+  } finally { busy(false); }
+});
+
+$("print").addEventListener("click", async () => {
+  const L = layout(); if (!L) return;
+  if (!window.jspdf) { msg("PDF-i koostaja ei laadinud. Laadi leht uuesti ja proovi veel.", true); return; }
+  busy(true);
+  try {
+    const blob = await buildPdf(L);
+    if (handheld) {
+      phoneFile = new File([blob], pdfName(L), { type: "application/pdf" });
+      $("phone").hidden = false;
+      msg("Valmis. Puuduta „Prindi kohe“ ja vali jagamismenüüst Print.");
+    } else {
+      printInFrame(URL.createObjectURL(blob));
+      msg("Vali printer ja määra suuruseks tegelik suurus / 100%.");
+    }
+  } catch (e) {
+    msg(e.message || "PDF-i ei õnnestunud koostada.", true);
+  } finally { busy(false); }
+});
+
+// iOS only allows the share sheet or a new tab straight from a tap, so this is a second
+// tap after the build. The share sheet needs HTTPS; plain HTTP falls back to a tab.
+let phoneFile = null;
+$("phone").addEventListener("click", async () => {
+  const data = { files: [phoneFile] };
+  if (navigator.canShare?.(data)) {
+    try { await navigator.share(data); return; }
+    catch (e) { if (e.name === "AbortError") return; }
+  }
+  window.open(URL.createObjectURL(phoneFile), "_blank");
+});
+
+function msg(t, err=false) { const m = $("msg"); m.textContent = t; m.classList.toggle("err", !!err); }
+
+$("form").addEventListener("input", e => { if (e.target.id !== "file" && e.target.id !== "pdfpage") update(); });
+$("form").addEventListener("submit", e => e.preventDefault());
+$("file").addEventListener("change", e => loadFile(e.target.files[0]));
+$("pdfpage").addEventListener("change", async e => {
+  if (!pdfDoc) return; const n = Math.min(pdfDoc.numPages, Math.max(1, +e.target.value || 1));
+  await renderPdfPage(n); $("fname").textContent = `${srcName}.pdf · leht ${n} · ${src.width} × ${src.height} px`; update();
+});
+const mat = $("mat");
+["dragenter","dragover"].forEach(ev => mat.addEventListener(ev, e => { e.preventDefault(); mat.classList.add("dragging"); }));
+["dragleave","drop"].forEach(ev => mat.addEventListener(ev, e => { e.preventDefault(); mat.classList.remove("dragging"); }));
+mat.addEventListener("drop", e => loadFile(e.dataTransfer.files[0]));
+window.addEventListener("resize", () => { const L = layout(); if (L) draw(L); });
+
+src = makeSample();
+update();
+document.fonts && document.fonts.ready.then(() => { const L = layout(); if (L) draw(L); });
+</script>

@@ -1,0 +1,9 @@
+services:
+  poster-tiler:
+    image: nginx:stable-alpine
+    container_name: poster-tiler
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:80" # reached through tailscale serve
+    volumes:
+      - ./poster-tiler.html:/usr/share/nginx/html/index.html:ro
